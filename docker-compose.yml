@@ -1,0 +1,117 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tunerai-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tunerai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tunerai_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tunerai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tunerai} -d ${POSTGRES_DB:-tunerai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tunerai-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: tunerai-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - tunerai-net
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: tunerai-api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tunerai}:${POSTGRES_PASSWORD:-tunerai_dev_password}@db:5432/${POSTGRES_DB:-tunerai}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./apps/api/app:/app/app
+      - ./apps/api/alembic:/app/alembic
+      - ./apps/api/alembic.ini:/app/alembic.ini
+      - ./packages:/app/packages
+      - ./ml:/app/ml
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tunerai-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    container_name: tunerai-worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tunerai}:${POSTGRES_PASSWORD:-tunerai_dev_password}@db:5432/${POSTGRES_DB:-tunerai}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./apps/api/app:/app/app
+      - ./packages:/app/packages
+      - ./ml:/app/ml
+      - ./workers:/app/workers
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tunerai-net
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=1
+    # Note: GPU worker will use a different Dockerfile with CUDA in production
+    profiles:
+      - full
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: tunerai-web
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+    networks:
+      - tunerai-net
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  tunerai-net:
+    driver: bridge

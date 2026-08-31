@@ -1,0 +1,98 @@
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+*.log
+
+# ML / Artifacts (weights, not Python ORM packages)
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.gguf
+# Ignore top-level / loose ML model weight dirs only — NEVER ignore apps/api/app/models (SQLAlchemy ORM)
+/models/
+ml/models/
+adapters/
+checkpoints/
+wandb/
+runs/
+outputs/
+artifacts/
+!artifacts/.gitkeep
+# Explicitly keep the API ORM package tracked by git
+!apps/api/app/models/
+!apps/api/app/models/**
+
+# Data
+data/raw/
+data/processed/
+*.jsonl
+!tests/fixtures/*.jsonl
+
+# Coverage & reports
+coverage/
+*.cover
+.hypothesis/
+
+# Misc
+tmp/
+temp/
+.cache/
+*.tmp

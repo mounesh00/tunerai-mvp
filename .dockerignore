@@ -1,0 +1,27 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.py[cod]
+**/*$py.class
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+apps/web
+**/.next
+**/dist
+**/build
+**/*.egg-info
+.venv
+venv
+.DS_Store
+.coverage
+htmlcov
+*.md
+!README.md
+
+# NEVER exclude application source
+# Do not add: apps/api/app, apps/api/app/models, ml, workers

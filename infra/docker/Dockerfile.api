@@ -1,0 +1,68 @@
+# TunerAI API — Render Web Service
+# Build context MUST be monorepo root (contains apps/, ml/, workers/, infra/)
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/api/requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip && pip install -r /app/requirements.txt
+
+# Copy full API package
+COPY apps/api/app /app/app
+
+# Explicit copy of ORM models — fails the build if git omitted them
+COPY apps/api/app/models/__init__.py /app/app/models/__init__.py
+COPY apps/api/app/models/user.py /app/app/models/user.py
+COPY apps/api/app/models /app/app/models
+
+COPY ml /app/ml
+COPY workers /app/workers
+COPY packages /app/packages
+COPY apps/api/alembic /app/alembic
+COPY apps/api/alembic.ini /app/alembic.ini
+
+RUN python - <<'PY'
+import pathlib, sys
+root = pathlib.Path("/app/app")
+required = [
+    root / "main.py",
+    root / "__init__.py",
+    root / "models" / "__init__.py",
+    root / "models" / "user.py",
+    root / "api" / "__init__.py",
+    root / "api" / "deps.py",
+    root / "api" / "v1" / "__init__.py",
+    root / "core" / "config.py",
+    root / "db" / "session.py",
+]
+missing = [str(p) for p in required if not p.is_file()]
+if missing:
+    print("MISSING FILES IN IMAGE:", *missing, sep="\n  ")
+    print("HINT: If models are missing, check .gitignore does NOT ignore apps/api/app/models/")
+    sys.exit(1)
+import app.models.user
+from app.models.user import User
+print("import_ok", User.__tablename__)
+PY
+
+RUN useradd -m -u 1000 tunerai && chown -R tunerai:tunerai /app
+USER tunerai
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1
+
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
