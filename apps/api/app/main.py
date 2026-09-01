@@ -2,8 +2,6 @@
 
 import asyncio
 import os
-import sys
-import traceback
 from contextlib import asynccontextmanager
 
 from alembic import command
@@ -31,11 +29,8 @@ async def lifespan(app: FastAPI):
         logger.info("running_db_migrations")
         try:
             await asyncio.to_thread(run_migrations)
-        except BaseException as exc:
-            print("=== MIGRATION FAILURE — RAW TRACEBACK ===", file=sys.stderr, flush=True)
-            traceback.print_exc(file=sys.stderr)
-            print(f"=== exception type: {type(exc).__name__} repr: {exc!r} ===", file=sys.stderr, flush=True)
-            sys.stderr.flush()
+        except Exception:
+            logger.exception("db_migrations_failed")
             raise
         logger.info("db_migrations_complete")
     logger.info("starting_tunerai_api", env=settings.app_env, debug=settings.app_debug)
