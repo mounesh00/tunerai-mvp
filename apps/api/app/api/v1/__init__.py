@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api import debug as debug_module
 from app.api.v1 import auth, datasets, deployments, health, inference, models, projects, training
 
 api_router = APIRouter()
@@ -12,5 +13,6 @@ api_router.include_router(datasets.router, prefix="/datasets", tags=["datasets"]
 api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(models.router, prefix="/models", tags=["models"])
 api_router.include_router(deployments.router, prefix="/deployments", tags=["deployments"])
+api_router.include_router(debug_module.router)
 # OpenAI-compatible path: /api/v1/v1/chat/completions — also mount at root-friendly path
 api_router.include_router(inference.router, prefix="/v1", tags=["inference"])
