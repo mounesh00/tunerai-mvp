@@ -42,8 +42,8 @@ def _build_r2_client():
         endpoint_url=endpoint_url,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
-        region_name=settings.s3_region,
-        use_ssl=use_ssl,
+        region_name="auto",
+        use_ssl=True,
     )
     return client, bucket_name
 
