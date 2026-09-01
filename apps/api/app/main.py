@@ -1,7 +1,10 @@
 """TunerAI FastAPI application entrypoint."""
 
+import os
 from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,9 +16,18 @@ setup_logging()
 logger = get_logger(__name__)
 
 
+def run_migrations():
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    if os.environ.get("APP_ENV") != "local":
+        logger.info("running_db_migrations")
+        run_migrations()
+        logger.info("db_migrations_complete")
     logger.info("starting_tunerai_api", env=settings.app_env, debug=settings.app_debug)
     yield
     logger.info("shutting_down_tunerai_api")
