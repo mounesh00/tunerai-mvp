@@ -27,7 +27,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if os.environ.get("APP_ENV") != "local":
         logger.info("running_db_migrations")
-        await asyncio.to_thread(run_migrations)
+        try:
+            await asyncio.to_thread(run_migrations)
+        except Exception:
+            logger.exception("db_migrations_failed")
+            raise
         logger.info("db_migrations_complete")
     logger.info("starting_tunerai_api", env=settings.app_env, debug=settings.app_debug)
     yield
