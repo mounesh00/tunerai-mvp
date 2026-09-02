@@ -9,21 +9,41 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=10, max_length=128)
     full_name: Optional[str] = Field(None, max_length=255)
     organization_name: Optional[str] = Field(None, max_length=255)
 
     @field_validator("password")
     @classmethod
-    def password_strength(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password meets MVP security policy."""
+        from app.core.password import validate_password
+        
+        is_valid, error_msg = validate_password(v)
+        if not is_valid:
+            raise ValueError(error_msg)
         return v
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password meets MVP security policy."""
+        from app.core.password import validate_password
+        
+        is_valid, error_msg = validate_password(v)
+        if not is_valid:
+            raise ValueError(error_msg)
+        return v
 
 
 class UserRead(BaseModel):
@@ -39,7 +59,7 @@ class UserRead(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=255)
-    password: Optional[str] = Field(None, min_length=8, max_length=128)
+    password: Optional[str] = Field(None, min_length=10, max_length=128)
 
 
 class Token(BaseModel):
@@ -52,3 +72,7 @@ class TokenPayload(BaseModel):
     sub: str
     type: str
     exp: int
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1)

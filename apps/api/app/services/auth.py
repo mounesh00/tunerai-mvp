@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_token,
     get_password_hash,
     verify_password,
 )
@@ -95,6 +96,78 @@ def create_tokens_for_user(user: User) -> Token:
     access = create_access_token(subject=str(user.id))
     refresh = create_refresh_token(subject=str(user.id))
     return Token(access_token=access, refresh_token=refresh)
+
+
+async def refresh_access_token(db: AsyncSession, refresh_token: str) -> Optional[str]:
+    """
+    Validate refresh token and return a new access token.
+    
+    Returns:
+        New access token string if valid, None if invalid
+    """
+    payload = decode_token(refresh_token)
+    
+    # Validate token structure
+    if payload is None:
+        return None
+    
+    # Ensure it's a refresh token, not an access token
+    if payload.get("type") != "refresh":
+        return None
+    
+    # Extract and validate user ID
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        return None
+    
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return None
+    
+    # Verify user exists and is active
+    user = await get_user_by_id(db, user_id)
+    if user is None or not user.is_active:
+        return None
+    
+    # Create and return new access token
+    return create_access_token(subject=str(user.id))
+
+
+async def change_password(
+    db: AsyncSession, user: User, current_password: str, new_password: str
+) -> bool:
+    """
+    Change password for authenticated user.
+    
+    Args:
+        db: Database session
+        user: Current user object
+        current_password: User's current password (plaintext)
+        new_password: New password (plaintext)
+        
+    Returns:
+        True if successful, False if current password is wrong
+        
+    Raises:
+        ValueError: If new password fails validation
+    """
+    # Verify current password
+    if not verify_password(current_password, user.hashed_password):
+        return False
+    
+    # Validate new password through password policy
+    from app.core.password import validate_password
+    
+    is_valid, error_msg = validate_password(new_password)
+    if not is_valid:
+        raise ValueError(error_msg)
+    
+    # Hash and update
+    user.hashed_password = get_password_hash(new_password)
+    await db.flush()
+    
+    return True
 
 
 async def get_user_organizations(db: AsyncSession, user_id: uuid.UUID) -> list[Organization]:

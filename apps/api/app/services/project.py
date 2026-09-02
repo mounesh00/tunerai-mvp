@@ -125,9 +125,34 @@ async def update_project(
     project = await get_project_for_user(db, user_id, project_id)
     if project is None:
         return None
+    
     update_data = data.model_dump(exclude_unset=True)
+    
+    # Handle slug regeneration if name is being updated
+    if "name" in update_data and update_data["name"]:
+        base_slug = slugify(update_data["name"])
+        new_slug = base_slug
+        counter = 1
+        
+        # Ensure uniqueness within the organization
+        while True:
+            result = await db.execute(
+                select(Project).where(
+                    Project.organization_id == project.organization_id,
+                    Project.slug == new_slug,
+                    Project.id != project.id,  # Exclude current project
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                break
+            new_slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        update_data["slug"] = new_slug
+    
     for field, value in update_data.items():
         setattr(project, field, value)
+    
     await db.flush()
     await db.refresh(project)
     return project

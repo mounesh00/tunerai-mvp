@@ -59,6 +59,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     structured_logging: bool = True
 
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def validate_jwt_secret_key(cls, v: str, info) -> str:
+        """Ensure JWT secret is strong in production."""
+        app_env = info.data.get("app_env", "development")
+        if app_env.lower() not in ("development", "dev", "local"):
+            # Production environment
+            if v == "change-me-jwt-secret-key" or len(v) < 32:
+                raise ValueError(
+                    "In production, JWT secret must be configured and at least 32 characters long. "
+                    "Set JWT_SECRET_KEY environment variable to a strong secret."
+                )
+        return v
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
