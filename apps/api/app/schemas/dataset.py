@@ -30,7 +30,6 @@ class DatasetVersionRead(BaseModel):
     id: UUID
     dataset_id: UUID
     version: str
-    storage_path: str
     original_filename: str
     format: str
     total_records: Optional[int] = None
@@ -38,6 +37,11 @@ class DatasetVersionRead(BaseModel):
     invalid_records: Optional[int] = None
     duplicate_count: Optional[int] = None
     duplicate_percentage: Optional[float] = None
+
+    # Content integrity
+    content_hash: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+
     avg_tokens: Optional[float] = None
     max_tokens: Optional[int] = None
     estimated_training_tokens: Optional[int] = None

@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
@@ -28,6 +28,8 @@ async def create_dataset(
         dataset = await dataset_service.create_dataset(db, current_user.id, data)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return DatasetRead.model_validate(dataset)
 
 
@@ -84,7 +86,13 @@ async def upload_dataset(
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
+        if "already been uploaded" in str(e):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except dataset_service.StorageError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    except dataset_service.StoragePersistenceError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     return DatasetVersionRead.model_validate(version)
 
@@ -105,3 +113,21 @@ async def get_quality_report(
         status=version.status,
         report=version.quality_report or {},
     )
+
+
+@router.get("/{dataset_id}/versions/{version_id}/download")
+async def get_dataset_download_url(
+    dataset_id: UUID,
+    version_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, str]:
+    try:
+        download_url = await dataset_service.get_download_url_for_user(
+            db, current_user.id, dataset_id, version_id
+        )
+    except dataset_service.StorageError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    if download_url is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return {"url": download_url}

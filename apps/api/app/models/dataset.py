@@ -36,12 +36,26 @@ class DatasetVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "dataset_versions"
 
     dataset_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     version: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g. v1, v1.1
     storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     format: Mapped[str] = mapped_column(String(50), default="jsonl", nullable=False)
+
+    # Content integrity
+    content_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    content_hash_algorithm: Mapped[str] = mapped_column(
+        String(20), default="sha256", nullable=False
+    )
+    file_size_bytes: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
 
     # Quality metrics (populated after validation)
     total_records: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -51,11 +65,15 @@ class DatasetVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     duplicate_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     avg_tokens: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     max_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    estimated_training_tokens: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    estimated_training_tokens: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
     train_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     validation_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     quality_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    quality_report: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    quality_report: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     warnings: Mapped[Optional[List[Any]]] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
 
