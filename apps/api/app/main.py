@@ -79,19 +79,6 @@ def create_app() -> FastAPI:
     async def root_health():
         return {"status": "healthy", "service": "tunerai-api", "version": "0.1.0"}
 
-    @app.get("/api/v1/debug/r2-check")
-    async def r2_check():
-        import boto3
-        import os
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=os.environ["S3_ENDPOINT_URL"],
-            aws_access_key_id=os.environ["S3_ACCESS_KEY"],
-            aws_secret_access_key=os.environ["S3_SECRET_KEY"],
-        )
-        resp = s3.list_objects_v2(Bucket=os.environ["S3_BUCKET_NAME"])
-        return {"key_count": resp.get("KeyCount", 0)}
-
     return app
 
 
