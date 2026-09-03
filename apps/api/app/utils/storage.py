@@ -2,7 +2,6 @@
 
 import hashlib
 import re
-from pathlib import Path
 
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:

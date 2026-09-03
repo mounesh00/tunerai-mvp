@@ -18,7 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import Organization, OrganizationMember, User
-from app.schemas.auth import Token, UserCreate, UserRead
+from app.schemas.auth import Token, UserCreate
 
 
 def slugify(text: str) -> str:

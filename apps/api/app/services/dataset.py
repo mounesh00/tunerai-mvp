@@ -15,8 +15,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.models.dataset import Dataset, DatasetVersion
-from app.models.project import Project
-from app.models.user import OrganizationMember
 from app.schemas.dataset import DatasetCreate
 from app.services.project import get_project_for_user, user_belongs_to_org
 from app.utils.storage import calculate_content_hash, generate_safe_object_key

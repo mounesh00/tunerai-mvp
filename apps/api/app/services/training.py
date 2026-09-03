@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.dataset import DatasetVersion
 from app.models.training import TrainingConfig, TrainingRun
 from app.schemas.training import TrainingRunCreate
 from app.services.dataset import get_version_for_user
