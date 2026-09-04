@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deployment import APIKey, Deployment
 from app.schemas.deployment import DeploymentCreate
-from app.services.model_registry import get_model_version_for_user
+from app.services.model_registry import get_model_for_user, get_model_version_for_user
 from app.services.project import get_project_for_user, require_org_role, user_belongs_to_org
 from ml.inference.openai_api import global_inference
 
@@ -31,6 +31,11 @@ async def create_deployment(
     version = await get_model_version_for_user(db, user_id, data.model_version_id)
     if version is None:
         raise PermissionError("Model version not found")
+    model = await get_model_for_user(db, user_id, version.model_id)
+    if model is None:
+        raise PermissionError("Model not found")
+    if model.project_id != project.id:
+        raise ValueError("Model version does not belong to this project")
     if version.status != "READY":
         raise ValueError("Model version is not READY")
 

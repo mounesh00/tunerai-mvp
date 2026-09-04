@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import TrainingConfig, TrainingRun
 from app.schemas.training import TrainingRunCreate
-from app.services.dataset import get_version_for_user
+from app.services.dataset import get_dataset_for_user, get_version_for_user
 from app.services.project import get_project_for_user, require_org_role, user_belongs_to_org
 from ml.training.config import SUPPORTED_BASE_MODELS, estimate_resources, resolve_config
 
@@ -55,6 +55,11 @@ async def create_training_run(
     version = await get_version_for_user(db, user_id, data.dataset_version_id)
     if version is None:
         raise PermissionError("Dataset version not found")
+    dataset = await get_dataset_for_user(db, user_id, version.dataset_id)
+    if dataset is None:
+        raise PermissionError("Dataset not found")
+    if dataset.project_id != project.id:
+        raise ValueError("Dataset version does not belong to this project")
     if version.status != "ready":
         raise ValueError("Dataset version is not ready for training")
 
