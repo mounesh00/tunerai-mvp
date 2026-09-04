@@ -36,6 +36,29 @@ def _sync_db_session():
     return Session()
 
 
+def _download_dataset_from_r2(storage_path: str) -> bytes:
+    """Fetch dataset bytes from Cloudflare R2 using a sync boto3 client.
+
+    Celery tasks run synchronously, so this uses boto3 (not aioboto3, which
+    the async FastAPI app uses) with the same S3-compatible configuration.
+    """
+    import boto3
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint_url,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name=settings.s3_region,
+        use_ssl=settings.s3_use_ssl,
+    )
+    response = client.get_object(Bucket=settings.s3_bucket_name, Key=storage_path)
+    return response["Body"].read()
+
+
 @celery_app.task(bind=True, name="workers.tasks.run_training_job")
 def run_training_job(self, training_run_id: str) -> Dict[str, Any]:
     """Execute a training run: PREPARING → TRAINING → EVALUATING → PACKAGING → COMPLETED."""
@@ -67,14 +90,20 @@ def run_training_job(self, training_run_id: str) -> Dict[str, Any]:
             set_status("FAILED", error_message="Dataset version not found")
             return {"status": "FAILED"}
 
-        # Load records from stored file
-        path = Path(dv.storage_path)
-        if not path.exists():
-            set_status("FAILED", error_message=f"Dataset file missing: {path}")
+        # Fetch dataset content from R2 (dv.storage_path is an R2 object key,
+        # not a local filesystem path — datasets are stored in Cloudflare R2
+        # since the Phase 3 storage migration)
+        try:
+            from botocore.exceptions import BotoCoreError, ClientError
+
+            content_bytes = _download_dataset_from_r2(dv.storage_path)
+        except (BotoCoreError, ClientError) as e:
+            set_status("FAILED", error_message=f"Unable to fetch dataset from object storage: {e}")
             return {"status": "FAILED"}
 
+        text = content_bytes.decode("utf-8")
         records = []
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in text.splitlines():
             line = line.strip()
             if not line:
                 continue
@@ -87,7 +116,6 @@ def run_training_job(self, training_run_id: str) -> Dict[str, Any]:
 
         validator = DatasetValidator()
         # Re-validate in-memory for train/val split
-        text = path.read_text(encoding="utf-8")
         validation = validator.validate_text(text)
         train_records = validation.train_records or records
         eval_records = validation.validation_records or []
