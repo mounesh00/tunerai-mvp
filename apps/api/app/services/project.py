@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Optional
+from typing import Iterable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.project import Project
 from app.models.user import OrganizationMember
 from app.schemas.project import ProjectCreate, ProjectUpdate
+
+ALLOWED_WRITE_ROLES = frozenset({"owner", "admin"})
 
 
 def slugify(text: str) -> str:
@@ -29,6 +31,32 @@ async def user_belongs_to_org(db: AsyncSession, user_id: uuid.UUID, org_id: uuid
         )
     )
     return result.scalar_one_or_none() is not None
+
+
+async def get_membership(
+    db: AsyncSession, user_id: uuid.UUID, org_id: uuid.UUID
+) -> Optional[OrganizationMember]:
+    result = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.organization_id == org_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def require_org_role(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    org_id: uuid.UUID,
+    allowed_roles: Iterable[str] = ALLOWED_WRITE_ROLES,
+) -> OrganizationMember:
+    membership = await get_membership(db, user_id, org_id)
+    if membership is None:
+        raise PermissionError("Not a member of this organization")
+    if membership.role not in set(allowed_roles):
+        raise PermissionError("Insufficient role for this action")
+    return membership
 
 
 async def get_user_default_org_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[uuid.UUID]:
@@ -53,8 +81,7 @@ async def create_project(
         if organization_id is None:
             raise ValueError("User has no organization")
 
-    if not await user_belongs_to_org(db, user_id, organization_id):
-        raise PermissionError("Not a member of this organization")
+    await require_org_role(db, user_id, organization_id)
 
     base_slug = slugify(data.name)
     slug = base_slug
@@ -125,6 +152,7 @@ async def update_project(
     project = await get_project_for_user(db, user_id, project_id)
     if project is None:
         return None
+    await require_org_role(db, user_id, project.organization_id)
     
     update_data = data.model_dump(exclude_unset=True)
     

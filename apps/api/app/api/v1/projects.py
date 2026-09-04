@@ -54,7 +54,12 @@ async def update_project(
     db: DbSession,
     current_user: CurrentUser,
 ) -> ProjectRead:
-    project = await project_service.update_project(db, current_user.id, project_id, data)
+    try:
+        project = await project_service.update_project(
+            db, current_user.id, project_id, data
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return ProjectRead.model_validate(project)

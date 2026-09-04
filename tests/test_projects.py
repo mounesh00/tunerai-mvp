@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
+from app.models.user import OrganizationMember, User
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.services import project as project_service
@@ -304,3 +304,82 @@ class TestTenantIsolation:
             db_session, other_user.id, organization_id=test_organization.id
         )
         assert len(projects) == 0
+
+
+class TestProjectRoleAuthorization:
+    async def test_member_can_read_but_cannot_write(
+        self, db_session: AsyncSession, test_user: User, other_user: User, test_organization
+    ):
+        project = await project_service.create_project(
+            db_session, test_user.id, ProjectCreate(name="Owner Project")
+        )
+        db_session.add(
+            OrganizationMember(
+                organization_id=test_organization.id,
+                user_id=other_user.id,
+                role="member",
+            )
+        )
+        await db_session.flush()
+
+        assert await project_service.get_project_for_user(
+            db_session, other_user.id, project.id
+        ) is not None
+        assert len(
+            await project_service.list_projects_for_user(
+                db_session, other_user.id, test_organization.id
+            )
+        ) == 1
+
+        with pytest.raises(PermissionError, match="Insufficient role"):
+            await project_service.create_project(
+                db_session,
+                other_user.id,
+                ProjectCreate(name="Member Project"),
+                organization_id=test_organization.id,
+            )
+        with pytest.raises(PermissionError, match="Insufficient role"):
+            await project_service.update_project(
+                db_session, other_user.id, project.id, ProjectUpdate(name="Renamed")
+            )
+
+    async def test_admin_can_create_and_update_project(
+        self, db_session: AsyncSession, other_user: User, test_organization
+    ):
+        db_session.add(
+            OrganizationMember(
+                organization_id=test_organization.id,
+                user_id=other_user.id,
+                role="admin",
+            )
+        )
+        await db_session.flush()
+
+        project = await project_service.create_project(
+            db_session,
+            other_user.id,
+            ProjectCreate(name="Admin Project"),
+            organization_id=test_organization.id,
+        )
+        updated = await project_service.update_project(
+            db_session, other_user.id, project.id, ProjectUpdate(name="Updated Admin Project")
+        )
+
+        assert updated is not None
+        assert updated.name == "Updated Admin Project"
+
+    async def test_owner_can_create_and_update_project(
+        self, db_session: AsyncSession, test_user: User, test_organization
+    ):
+        project = await project_service.create_project(
+            db_session,
+            test_user.id,
+            ProjectCreate(name="Owner Project"),
+            organization_id=test_organization.id,
+        )
+        updated = await project_service.update_project(
+            db_session, test_user.id, project.id, ProjectUpdate(name="Updated Owner Project")
+        )
+
+        assert updated is not None
+        assert updated.name == "Updated Owner Project"

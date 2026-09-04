@@ -17,7 +17,11 @@ from sqlalchemy.orm import selectinload
 from app.core.config import get_settings
 from app.models.dataset import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetCreate
-from app.services.project import get_project_for_user, user_belongs_to_org
+from app.services.project import (
+    get_project_for_user,
+    require_org_role,
+    user_belongs_to_org,
+)
 from app.utils.storage import calculate_content_hash, generate_safe_object_key
 
 
@@ -87,6 +91,7 @@ async def create_dataset(
     project = await get_project_for_user(db, user_id, data.project_id)
     if project is None:
         raise PermissionError("Project not found or access denied")
+    await require_org_role(db, user_id, project.organization_id)
 
     dataset = Dataset(
         organization_id=project.organization_id,
@@ -154,6 +159,7 @@ async def upload_and_validate(
     dataset = await get_dataset_for_user(db, user_id, dataset_id)
     if dataset is None:
         raise PermissionError("Dataset not found or access denied")
+    await require_org_role(db, user_id, dataset.organization_id)
 
     # Extension / size checks
     lower = filename.lower()

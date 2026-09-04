@@ -11,13 +11,14 @@ from sqlalchemy.orm import selectinload
 
 from app.models.model_registry import Model, ModelVersion
 from app.schemas.model_registry import ModelCreate
-from app.services.project import get_project_for_user, user_belongs_to_org
+from app.services.project import get_project_for_user, require_org_role, user_belongs_to_org
 
 
 async def create_model(db: AsyncSession, user_id: uuid.UUID, data: ModelCreate) -> Model:
     project = await get_project_for_user(db, user_id, data.project_id)
     if project is None:
         raise PermissionError("Project not found")
+    await require_org_role(db, user_id, project.organization_id)
     model = Model(
         organization_id=project.organization_id,
         project_id=project.id,

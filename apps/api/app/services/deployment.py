@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.deployment import APIKey, Deployment
 from app.schemas.deployment import DeploymentCreate
 from app.services.model_registry import get_model_version_for_user
-from app.services.project import get_project_for_user, user_belongs_to_org
+from app.services.project import get_project_for_user, require_org_role, user_belongs_to_org
 from ml.inference.openai_api import global_inference
 
 
@@ -27,6 +27,7 @@ async def create_deployment(
     project = await get_project_for_user(db, user_id, data.project_id)
     if project is None:
         raise PermissionError("Project not found")
+    await require_org_role(db, user_id, project.organization_id)
     version = await get_model_version_for_user(db, user_id, data.model_version_id)
     if version is None:
         raise PermissionError("Model version not found")
@@ -82,8 +83,7 @@ async def get_deployment_by_slug(
 async def create_api_key(
     db: AsyncSession, user_id: uuid.UUID, organization_id: uuid.UUID, name: str, rpm: Optional[int]
 ) -> tuple[APIKey, str]:
-    if not await user_belongs_to_org(db, user_id, organization_id):
-        raise PermissionError("Not a member of organization")
+    await require_org_role(db, user_id, organization_id)
     raw = f"tai_{secrets.token_urlsafe(32)}"
     prefix = raw[:12]
     key_hash = hashlib.sha256(raw.encode()).hexdigest()

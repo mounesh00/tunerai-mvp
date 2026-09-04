@@ -98,6 +98,7 @@ async def test_uploads_to_r2_and_persists_safe_key(monkeypatch):
     db = make_db()
     client = SimpleNamespace(put_object=AsyncMock())
     monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "require_org_role", AsyncMock())
     monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
 
     version = await dataset_service.upload_and_validate(
@@ -120,6 +121,7 @@ async def test_upload_storage_failure_does_not_persist(monkeypatch):
         )
     )
     monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "require_org_role", AsyncMock())
     monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
 
     with pytest.raises(dataset_service.StorageError):
@@ -134,6 +136,7 @@ async def test_upload_cleans_up_r2_object_when_persistence_fails(monkeypatch):
     db = make_db(flush_error=RuntimeError("database unavailable"))
     client = SimpleNamespace(put_object=AsyncMock(), delete_object=AsyncMock())
     monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "require_org_role", AsyncMock())
     monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
 
     with pytest.raises(dataset_service.StoragePersistenceError):
@@ -148,6 +151,7 @@ async def test_upload_rejects_duplicate_content_without_uploading(monkeypatch):
     db = make_db(existing_content=uuid4())
     client = SimpleNamespace(put_object=AsyncMock())
     monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "require_org_role", AsyncMock())
     monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
 
     with pytest.raises(ValueError, match="already been uploaded"):
@@ -167,6 +171,7 @@ async def test_upload_cleans_up_and_rejects_concurrent_duplicate_content(monkeyp
     )
     client = SimpleNamespace(put_object=AsyncMock(), delete_object=AsyncMock())
     monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "require_org_role", AsyncMock())
     monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
 
     with pytest.raises(dataset_service.DuplicateContentError, match="already been uploaded"):

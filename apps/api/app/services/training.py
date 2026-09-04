@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.training import TrainingConfig, TrainingRun
 from app.schemas.training import TrainingRunCreate
 from app.services.dataset import get_version_for_user
-from app.services.project import get_project_for_user, user_belongs_to_org
+from app.services.project import get_project_for_user, require_org_role, user_belongs_to_org
 from ml.training.config import SUPPORTED_BASE_MODELS, estimate_resources, resolve_config
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ async def create_training_run(
     project = await get_project_for_user(db, user_id, data.project_id)
     if project is None:
         raise PermissionError("Project not found")
+    await require_org_role(db, user_id, project.organization_id)
 
     version = await get_version_for_user(db, user_id, data.dataset_version_id)
     if version is None:
@@ -143,6 +144,7 @@ async def cancel_run(
     run = await get_run_for_user(db, user_id, run_id)
     if run is None:
         return None
+    await require_org_role(db, user_id, run.organization_id)
     if run.status in ("COMPLETED", "FAILED", "CANCELLED"):
         return run
     if run.status in ("QUEUED", "PREPARING"):
