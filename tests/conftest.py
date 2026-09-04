@@ -88,7 +88,8 @@ async def test_engine():
                 status VARCHAR(50) DEFAULT 'active',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+                FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                UNIQUE (organization_id, slug)
             )
         """)
     

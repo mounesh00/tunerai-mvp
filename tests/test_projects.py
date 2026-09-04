@@ -1,6 +1,8 @@
 """Comprehensive tests for project endpoints and tenant isolation."""
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import OrganizationMember, User
@@ -98,6 +100,32 @@ class TestProjectCreation:
         
         assert project1.slug == "my-project"
         assert project2.slug == "my-project-1"
+
+    async def test_database_rejects_duplicate_slug_within_organization(
+        self, db_session: AsyncSession, test_organization
+    ):
+        values = {
+            "id": "duplicate-project-id",
+            "organization_id": str(test_organization.id),
+            "name": "First Project",
+            "slug": "duplicate-slug",
+        }
+        await db_session.execute(
+            text(
+                "INSERT INTO projects (id, organization_id, name, slug) "
+                "VALUES (:id, :organization_id, :name, :slug)"
+            ),
+            values,
+        )
+
+        with pytest.raises(IntegrityError):
+            await db_session.execute(
+                text(
+                    "INSERT INTO projects (id, organization_id, name, slug) "
+                    "VALUES (:id, :organization_id, :name, :slug)"
+                ),
+                {**values, "id": "second-duplicate-project-id", "name": "Second Project"},
+            )
 
 
 class TestProjectListing:

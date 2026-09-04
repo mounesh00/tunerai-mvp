@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import String, Text
+from sqlalchemy import String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, OrganizationScopedMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 
 class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin, OrganizationScopedMixin):
     __tablename__ = "projects"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "slug", name="uq_projects_org_slug"),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)

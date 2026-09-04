@@ -7,6 +7,7 @@ import uuid
 from typing import Iterable, Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project
@@ -107,7 +108,11 @@ async def create_project(
         status="active",
     )
     db.add(project)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ValueError("Project slug already exists in this organization") from error
     await db.refresh(project)
     return project
 
@@ -181,6 +186,10 @@ async def update_project(
     for field, value in update_data.items():
         setattr(project, field, value)
     
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ValueError("Project slug already exists in this organization") from error
     await db.refresh(project)
     return project
