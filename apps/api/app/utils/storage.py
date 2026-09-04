@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+import uuid
 
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
@@ -86,7 +87,8 @@ def generate_safe_object_key(
         original_filename: User-provided filename (will be sanitized)
 
     Returns:
-        Safe S3 object key: organizations/{org}/projects/{proj}/datasets/{ds}/versions/{ver}/{sanitized}
+        Safe S3 object key with a server-generated identifier.
     """
     sanitized = sanitize_filename(original_filename)
-    return f"organizations/{organization_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_label}/{sanitized}"
+    object_id = uuid.uuid4().hex
+    return f"organizations/{organization_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_label}/{object_id}-{sanitized}"

@@ -10,6 +10,7 @@ from typing import AsyncIterator, Optional
 import aioboto3
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +27,10 @@ class StorageError(RuntimeError):
 
 class StoragePersistenceError(RuntimeError):
     """Raised after an uploaded object cannot be recorded in the database."""
+
+
+class DuplicateContentError(ValueError):
+    """Raised when concurrent uploads persist identical dataset content."""
 
 
 @asynccontextmanager
@@ -48,6 +53,30 @@ def _slugify(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_-]+", "-", text)
     return text[:80] or "dataset"
+
+
+async def _delete_uploaded_object(storage_path: str) -> None:
+    settings = get_settings()
+    try:
+        async with _storage_client() as client:
+            await client.delete_object(
+                Bucket=settings.s3_bucket_name,
+                Key=storage_path,
+            )
+    except (BotoCoreError, ClientError):
+        pass
+
+
+def _is_duplicate_content_constraint(error: IntegrityError) -> bool:
+    current_error = error.orig
+    while current_error is not None:
+        constraint_name = getattr(
+            getattr(current_error, "diag", None), "constraint_name", None
+        ) or getattr(current_error, "constraint_name", None)
+        if constraint_name == "uq_dataset_versions_dataset_content_hash":
+            return True
+        current_error = getattr(current_error, "__cause__", None)
+    return False
 
 
 async def create_dataset(
@@ -210,15 +239,17 @@ async def upload_and_validate(
     dataset.status = "ready" if version.status == "ready" else "failed"
     try:
         await db.flush()
+    except IntegrityError as persistence_error:
+        await _delete_uploaded_object(storage_path)
+        if _is_duplicate_content_constraint(persistence_error):
+            raise DuplicateContentError(
+                "This content has already been uploaded to this dataset"
+            ) from persistence_error
+        raise StoragePersistenceError(
+            "Unable to save dataset metadata after object upload"
+        ) from persistence_error
     except Exception as persistence_error:
-        try:
-            async with _storage_client() as client:
-                await client.delete_object(
-                    Bucket=settings.s3_bucket_name,
-                    Key=storage_path,
-                )
-        except (BotoCoreError, ClientError):
-            pass
+        await _delete_uploaded_object(storage_path)
         raise StoragePersistenceError(
             "Unable to save dataset metadata after object upload"
         ) from persistence_error

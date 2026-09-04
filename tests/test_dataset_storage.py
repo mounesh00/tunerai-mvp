@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1 import datasets as datasets_api
 from app.schemas.dataset import DatasetVersionRead
@@ -53,7 +54,8 @@ def test_sanitize_filename_prevents_path_traversal():
 
 def test_generate_safe_object_key_uses_tenant_scope_and_sanitized_filename():
     key = generate_safe_object_key("org", "project", "dataset", "v1", "../data.jsonl")
-    assert key == "organizations/org/projects/project/datasets/dataset/versions/v1/data.jsonl"
+    assert key.startswith("organizations/org/projects/project/datasets/dataset/versions/v1/")
+    assert key.endswith("-data.jsonl")
 
 
 def test_calculate_content_hash_uses_sha256():
@@ -102,7 +104,7 @@ async def test_uploads_to_r2_and_persists_safe_key(monkeypatch):
         db, uuid4(), dataset.id, "../training.jsonl", b'{"instruction":"a","output":"b"}\n'
     )
 
-    assert version.storage_path.endswith("/training.jsonl")
+    assert version.storage_path.endswith("-training.jsonl")
     assert version.content_hash == calculate_content_hash(b'{"instruction":"a","output":"b"}\n')
     assert version.file_size_bytes == len(b'{"instruction":"a","output":"b"}\n')
     client.put_object.assert_awaited_once()
@@ -153,6 +155,26 @@ async def test_upload_rejects_duplicate_content_without_uploading(monkeypatch):
             db, uuid4(), dataset.id, "training.jsonl", b'{"instruction":"a","output":"b"}\n'
         )
     client.put_object.assert_not_awaited()
+
+
+async def test_upload_cleans_up_and_rejects_concurrent_duplicate_content(monkeypatch):
+    class DuplicateViolation(Exception):
+        constraint_name = "uq_dataset_versions_dataset_content_hash"
+
+    dataset = make_dataset()
+    db = make_db(
+        flush_error=IntegrityError("INSERT", {}, DuplicateViolation())
+    )
+    client = SimpleNamespace(put_object=AsyncMock(), delete_object=AsyncMock())
+    monkeypatch.setattr(dataset_service, "get_dataset_for_user", AsyncMock(return_value=dataset))
+    monkeypatch.setattr(dataset_service, "_storage_client", lambda: StorageClientContext(client))
+
+    with pytest.raises(dataset_service.DuplicateContentError, match="already been uploaded"):
+        await dataset_service.upload_and_validate(
+            db, uuid4(), dataset.id, "training.jsonl", b'{"instruction":"a","output":"b"}\n'
+        )
+
+    assert client.delete_object.await_args.kwargs["Key"] == client.put_object.await_args.kwargs["Key"]
 
 
 async def test_download_url_is_presigned_only_for_matching_dataset(monkeypatch):

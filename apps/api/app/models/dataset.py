@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,13 @@ class Dataset(Base, UUIDPrimaryKeyMixin, TimestampMixin, OrganizationScopedMixin
 
 class DatasetVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "dataset_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id",
+            "content_hash",
+            name="uq_dataset_versions_dataset_content_hash",
+        ),
+    )
 
     dataset_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
