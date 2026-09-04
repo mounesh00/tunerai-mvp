@@ -51,7 +51,6 @@ class TrainingRunRead(BaseModel):
     logs: Optional[str] = None
     error_message: Optional[str] = None
     metrics: Optional[Dict[str, Any]] = None
-    artifact_path: Optional[str] = None
     estimated_vram_gb: Optional[float] = None
     estimated_time_minutes: Optional[float] = None
     estimated_cost_usd: Optional[float] = None

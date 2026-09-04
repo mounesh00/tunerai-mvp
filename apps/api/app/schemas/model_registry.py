@@ -25,7 +25,6 @@ class ModelVersionRead(BaseModel):
     training_config: Optional[Dict[str, Any]] = None
     evaluation_results: Optional[Dict[str, Any]] = None
     domain_score: Optional[float] = None
-    storage_path: str
     status: str
     created_at: datetime
     updated_at: datetime
