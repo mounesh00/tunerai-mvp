@@ -1,7 +1,8 @@
 """OpenAI-compatible inference endpoint."""
 
-from fastapi import APIRouter, Header, HTTPException
 from typing import Optional
+
+from fastapi import APIRouter, Header, HTTPException
 
 from app.api.deps import DbSession
 from app.schemas.deployment import ChatCompletionRequest
@@ -21,18 +22,25 @@ async def chat_completions(
     OpenAI-compatible chat completions.
 
     Model id format: tunerai/<endpoint_slug>
-    Auth: Bearer <api_key> (optional in v0.1 dev; recommended for production)
+    Auth: Bearer <api_key> (required)
     """
-    if authorization and authorization.lower().startswith("bearer "):
-        raw = authorization.split(" ", 1)[1].strip()
-        key = await deployment_service.verify_api_key(db, raw)
-        if key is None:
-            raise HTTPException(status_code=401, detail="Invalid API key")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+    raw = authorization.split(" ", 1)[1].strip()
+    api_key = await deployment_service.verify_api_key(db, raw)
+    if api_key is None:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
     model_id = body.model
     if not model_id.startswith("tunerai/"):
-        # Allow direct registration for local demo
-        global_inference.register_mock(model_id)
+        raise HTTPException(status_code=400, detail="Unknown model. Use tunerai/<endpoint_slug>.")
+
+    slug = model_id[len("tunerai/"):]
+    deployment = await deployment_service.get_deployment_by_slug(db, api_key.organization_id, slug)
+    if deployment is None:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+
+    global_inference.register_mock(model_id)
 
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:

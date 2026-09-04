@@ -67,8 +67,15 @@ async def list_deployments(
     return list(result.scalars().all())
 
 
-async def get_deployment_by_slug(db: AsyncSession, slug: str) -> Optional[Deployment]:
-    result = await db.execute(select(Deployment).where(Deployment.endpoint_slug == slug))
+async def get_deployment_by_slug(
+    db: AsyncSession, organization_id: uuid.UUID, slug: str
+) -> Optional[Deployment]:
+    result = await db.execute(
+        select(Deployment).where(
+            Deployment.endpoint_slug == slug,
+            Deployment.organization_id == organization_id,
+        )
+    )
     return result.scalar_one_or_none()
 
 
